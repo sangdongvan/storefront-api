@@ -4,6 +4,7 @@ using Storefront.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using OpenIddict.Abstractions;
 using OpenIddict.Client;
 
 namespace Storefront.Controllers;
@@ -80,13 +81,24 @@ public class AuthController(
             Password = request.Password,
             Scopes = ["offline_access"]
         };
-        var result = await openIddictClientService.AuthenticateWithPasswordAsync(authenticationRequest);
-
-        return Ok(new GetUserTokenResponse
+        try
         {
-            AccessToken = result.AccessToken,
-            RefreshToken = result.RefreshToken
-        });
+            var result = await openIddictClientService.AuthenticateWithPasswordAsync(authenticationRequest);
+            return Ok(new GetUserTokenResponse
+            {
+                AccessToken = result.AccessToken,
+                RefreshToken = result.RefreshToken!
+            });
+        }
+        catch (OpenIddictExceptions.ProtocolException ex)
+        {
+            if (ex.Error == "invalid_grant")
+            {
+                return Problem("Invalid credentials.", statusCode: 400);
+            }
+
+            return Problem(ex.Message);
+        }
     }
 
     [HttpPost]
